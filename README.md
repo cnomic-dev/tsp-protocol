@@ -187,11 +187,10 @@ Contributions, forks, and extensions are welcome. Please submit issues and pull 
 
 If you use TSP v0.1 in your work, please cite:
 
-```bibtex
-@protocol{cnomic2026tsp,
-  title={Ternary Semantic Packet: TSP v0.1},
-  author={cnomic-dev},
-  year={2026},
-  url={https://github.com/cnomic-dev/tsp-protocol}
-}
-```
+# 正確的引用方式 (對應目前的資料夾結構)
+from tsp_protocol import phi_canonical, verify_vec
+
+s = (1, 0, -1)
+vec = phi_canonical(s)
+print(f"S3 Vector: {vec}")
+print(f"Verified: {verify_vec(s, vec)}")
