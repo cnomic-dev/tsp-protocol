@@ -187,15 +187,14 @@ Contributions, forks, and extensions are welcome. Please submit issues and pull 
 
 If you use TSP v0.1 in your work, please cite:
 
-# 這是目前 GitHub 結構的最正確引用方式
-from tsp_protocol.core import make_packet, verify_packet
+# 這是針對目前 GitHub 套件結構的正確寫法
+from tsp_protocol import make_packet, verify_packet
 
-# 1. 建立一個三元語意封包 (Intent, Context, Operation)
+# 1. 建立一個三元語意封包 (I: Intent, C: Context, O: Operation)
 s = [1, 0, -1]
 packet = make_packet(s, act="query", origin="node-01")
 
 # 2. 驗證幾何誠實度 (Geometric Honesty)
-# 系統會自動檢查 vec 是否真的符合 s 的 S3 投影
 is_valid, reason = verify_packet(packet)
 
 print(f"Packet: {packet}")
