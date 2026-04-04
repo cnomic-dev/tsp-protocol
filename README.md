@@ -187,10 +187,16 @@ Contributions, forks, and extensions are welcome. Please submit issues and pull 
 
 If you use TSP v0.1 in your work, please cite:
 
-# 正確的引用方式 (對應目前的資料夾結構)
-from tsp_protocol import phi_canonical, verify_vec
+# 這是目前 GitHub 結構的最正確引用方式
+from tsp_protocol.core import make_packet, verify_packet
 
-s = (1, 0, -1)
-vec = phi_canonical(s)
-print(f"S3 Vector: {vec}")
-print(f"Verified: {verify_vec(s, vec)}")
+# 1. 建立一個三元語意封包 (Intent, Context, Operation)
+s = [1, 0, -1]
+packet = make_packet(s, act="query", origin="node-01")
+
+# 2. 驗證幾何誠實度 (Geometric Honesty)
+# 系統會自動檢查 vec 是否真的符合 s 的 S3 投影
+is_valid, reason = verify_packet(packet)
+
+print(f"Packet: {packet}")
+print(f"Is Valid: {is_valid} ({reason})")
