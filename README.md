@@ -157,6 +157,25 @@ distance = TSPCore.chordal_distance(v1, v2)
 print(f"Chordal Distance: {distance:.5f}")
 ```
 
+### Functional API (equivalent)
+
+`tsp_protocol` also exports a flat, function-based interface — same underlying
+implementation as `TSPCore`/`TSPSecurity` above, no class needed:
+
+```python
+from tsp_protocol import make_packet, verify_packet
+
+# 1. Build a ternary semantic packet (I: Intent, C: Context, O: Operation)
+s = [1, 0, -1]
+packet = make_packet(s, act="query", origin="node-01")
+
+# 2. Verify Geometric Honesty
+is_valid, reason = verify_packet(packet)
+
+print(f"Packet: {packet}")
+print(f"Is Valid: {is_valid} ({reason})")
+```
+
 ---
 
 ## Ecosystem & Relationships
@@ -187,15 +206,7 @@ Contributions, forks, and extensions are welcome. Please submit issues and pull 
 
 If you use TSP v0.1 in your work, please cite:
 
-# 這是針對目前 GitHub 套件結構的正確寫法
-from tsp_protocol import make_packet, verify_packet
-
-# 1. 建立一個三元語意封包 (I: Intent, C: Context, O: Operation)
-s = [1, 0, -1]
-packet = make_packet(s, act="query", origin="node-01")
-
-# 2. 驗證幾何誠實度 (Geometric Honesty)
-is_valid, reason = verify_packet(packet)
-
-print(f"Packet: {packet}")
-print(f"Is Valid: {is_valid} ({reason})")
+```
+cnomic-dev. (2026). Ternary Semantic Packet (TSP) Protocol, v0.1.
+https://github.com/cnomic-dev/tsp-protocol
+```

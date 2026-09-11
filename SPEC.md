@@ -46,6 +46,7 @@ A semantic match (Cache Hit) is determined by the threshold $\epsilon$ (epsilon)
 | `s` | Array | Canonical ternary values [I, C, O] |
 | `vec` | Array | Derived 4D S³ unit vector |
 | `control` | Object | Contains `eps` and `profile` (e.g., "sta-v0.1") |
+| `lang` | Object | *Optional.* Source/target language codes for cross-lingual matching: `{"src": ..., "tgt": ...}` |
 | `origin` | String | Attribution seed for the creator |
 | `sig` | String | Signature (Default: "none" or "hmac-sha256:<hex>") |
 
