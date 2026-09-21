@@ -99,6 +99,7 @@ def make_packet(
     lang_src: Optional[str] = None,
     lang_tgt: Optional[str] = None,
     origin: Optional[str] = "none",
+    text_hash: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Create a compliant TSP v0.1 packet.
@@ -109,6 +110,12 @@ def make_packet(
                           given, the packet gets an optional `lang` object
                           (present in README's example packet but previously
                           unsupported here).
+    text_hash : optional content key, stored as meta.text_hash. The triple
+                encodes *how* a request is phrased (intent/register/operation),
+                not *what* it is about, so a cache needs this to tell two
+                different requests with the same triple apart. (Present in the
+                original tests/tsp_v01.py implementation; restored here after
+                being dropped in the earlier consolidation.)
     """
     if act not in VALID_ACT:
         raise ValueError(f"act must be one of {VALID_ACT}, got {act!r}")
@@ -128,6 +135,8 @@ def make_packet(
     }
     if lang_src or lang_tgt:
         pkt["lang"] = {k: v for k, v in [("src", lang_src), ("tgt", lang_tgt)] if v}
+    if text_hash:
+        pkt.setdefault("meta", {})["text_hash"] = text_hash
     return pkt
 
 
@@ -177,56 +186,100 @@ def verify_integrity(packet: Dict[str, Any]) -> bool:
 
 class SemanticCache:
     """
-    In-memory semantic cache using the precomputed 27x27 chordal-distance
-    matrix for O(1) retrieval. Eviction order: TTL expiry first, then
-    lowest hit-count (LRU approximation).
+    In-memory semantic cache over the 27-point ternary lattice.
+
+    Entries are keyed by (content_key, triple). A lookup only ever compares
+    against entries with the *same* content_key, so it inspects at most 27
+    candidates — genuinely O(1), unlike the previous version, which scanned
+    every stored entry.
+
+    content_key=None reproduces the old behavior (triple-only key). That mode
+    is kept for backward compatibility but is semantically unsafe: every
+    request with triple (1, 0, -1) — "summarize this, technical register" —
+    would share a single cached answer regardless of what is being
+    summarized. See tsp_protocol.semantics for the analysis.
+
+    Matching: by default a chordal-distance threshold `eps` (SPEC §3.2). A
+    `matcher(query_triple, cached_triple) -> bool` may be passed instead, e.g.
+    a policy selected by tsp_protocol.dream from replayed logs.
+    Eviction: TTL expiry first, then lowest hit-count (LRU approximation).
     """
 
-    def __init__(self, max_entries: int = 1000, ttl: float = 86400) -> None:
+    def __init__(self, max_entries: int = 1000, ttl: float = 86400,
+                 matcher=None) -> None:
         self.max_entries = max_entries
         self.ttl = ttl
-        self._store: Dict[str, Dict[str, Any]] = {}
+        self.matcher = matcher
+        # content_key -> {triple -> entry}
+        self._store: Dict[Any, Dict[Tuple[int, int, int], Dict[str, Any]]] = {}
+        self._size = 0
+
+    def __len__(self) -> int:
+        return self._size
 
     def _evict(self) -> None:
         now = time.time()
-        expired = [k for k, v in self._store.items() if now - v["ts"] > self.ttl]
-        if expired:
-            del self._store[expired[0]]
-            return
-        if self._store:
-            lru = min(self._store, key=lambda k: self._store[k]["hits"])
-            del self._store[lru]
+        victim, victim_hits = None, None
+        for ck, bucket in self._store.items():
+            for t, e in bucket.items():
+                if now - e["ts"] > self.ttl:
+                    victim = (ck, t)
+                    break
+                if victim_hits is None or e["hits"] < victim_hits:
+                    victim, victim_hits = (ck, t), e["hits"]
+            else:
+                continue
+            break
+        if victim is not None:
+            self._remove(*victim)
 
-    def put(self, triple: Tuple[int, int, int], result: Any) -> None:
-        """Store a result keyed by ternary triple."""
-        if len(self._store) >= self.max_entries:
+    def _remove(self, ck, t) -> None:
+        bucket = self._store.get(ck)
+        if bucket and t in bucket:
+            del bucket[t]
+            self._size -= 1
+            if not bucket:
+                del self._store[ck]
+
+    def put(self, triple: Tuple[int, int, int], result: Any,
+            content_key: Any = None) -> None:
+        """Store a result under (content_key, triple)."""
+        t = tuple(int(x) for x in triple)
+        bucket = self._store.get(content_key)
+        if not (bucket and t in bucket) and self._size >= self.max_entries:
             self._evict()
-        key = str(triple)
-        self._store[key] = {"triple": triple, "result": result, "hits": 1, "ts": time.time()}
+            bucket = self._store.get(content_key)
+        if bucket is None:
+            bucket = self._store[content_key] = {}
+        if t not in bucket:
+            self._size += 1
+        bucket[t] = {"triple": t, "result": result, "hits": 1, "ts": time.time()}
 
-    def get(self, triple: Tuple[int, int, int], eps: float = EPS_CACHE_DEFAULT) -> Optional[Any]:
-        """Retrieve a result if a semantically close triple exists in cache."""
-        now = time.time()
-        idx_q = _TRIPLE_INDEX.get(tuple(triple))
-        if idx_q is None:
+    def get(self, triple: Tuple[int, int, int], eps: float = EPS_CACHE_DEFAULT,
+            content_key: Any = None) -> Optional[Any]:
+        """Return the closest matching cached result for this content, or None."""
+        q = tuple(int(x) for x in triple)
+        idx_q = _TRIPLE_INDEX.get(q)
+        bucket = self._store.get(content_key)
+        if idx_q is None or not bucket:
             return None
 
-        best_dist, best_key = float("inf"), None
-        for key, entry in list(self._store.items()):
+        now = time.time()
+        best_dist, best_t = float("inf"), None
+        for t, entry in list(bucket.items()):
             if now - entry["ts"] > self.ttl:
-                del self._store[key]
+                self._remove(content_key, t)
                 continue
-            idx_c = _TRIPLE_INDEX.get(entry["triple"])
-            if idx_c is None:
-                continue
-            d = _DIST_MATRIX[idx_q, idx_c]
-            if d < best_dist:
-                best_dist, best_key = d, key
+            d = _DIST_MATRIX[idx_q, _TRIPLE_INDEX[t]]
+            ok = self.matcher(q, t) if self.matcher is not None else d <= eps
+            if ok and d < best_dist:
+                best_dist, best_t = d, t
 
-        if best_dist <= eps and best_key:
-            self._store[best_key]["hits"] += 1
-            return self._store[best_key]["result"]
-        return None
+        if best_t is None:
+            return None
+        entry = self._store[content_key][best_t]
+        entry["hits"] += 1
+        return entry["result"]
 
 
 # ── Backward-compatible OOP wrapper ──────────────────────────────────────────

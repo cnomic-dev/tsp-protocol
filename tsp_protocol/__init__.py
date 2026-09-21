@@ -21,7 +21,18 @@ from .security import (
     TSPSecurity,
 )
 
+from .semantics import (
+    describe,
+    lattice_report,
+    verify_semantic,
+    DimensionPolicy,
+    EpsPolicy,
+)
+from .dream import LogEntry, replay, dream
+
 __all__ = [
+    "describe", "lattice_report", "verify_semantic", "DimensionPolicy", "EpsPolicy",
+    "LogEntry", "replay", "dream",
     "make_packet", "verify_packet", "verify_integrity",
     "phi_canonical", "vec_to_s", "verify_vec", "chordal_distance", "canonical_json",
     "SemanticCache", "TSPCore",
