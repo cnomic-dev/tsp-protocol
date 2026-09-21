@@ -176,6 +176,27 @@ print(f"Packet: {packet}")
 print(f"Is Valid: {is_valid} ({reason})")
 ```
 
+### Ternary semantics & offline policy selection
+
+```python
+from tsp_protocol import SemanticCache, DimensionPolicy, lattice_report, LogEntry, dream
+
+# What eps = 0.65 actually does on the 27-point lattice
+print(lattice_report(0.65))
+
+# Content-keyed cache; allow register (C) to differ, never Intent or Operation
+cache = SemanticCache(matcher=DimensionPolicy(frozenset({"C"})))
+cache.put((1, 0, -1), "summary of doc A", content_key="doc-A")
+cache.get((1, 1, -1), content_key="doc-A")   # hit: only register changed
+cache.get((1, 0, 0),  content_key="doc-A")   # miss: summarize != translate
+
+# Choose a match rule from shadow-mode logs (every request inferred, answer_key known)
+out = dream([[LogEntry("doc-A", (1, 0, -1), "ans-1"), ...]], lam=5.0)
+print(out["selected"]["name"])
+```
+
+See SPEC.md §3.3–3.4.
+
 ---
 
 ## Ecosystem & Relationships

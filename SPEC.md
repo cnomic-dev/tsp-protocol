@@ -36,6 +36,30 @@ A semantic match (Cache Hit) is determined by the threshold $\epsilon$ (epsilon)
 * **Default Epsilon:** $0.65$
 * **Logic:** If $d_c \leq \epsilon$, the intent is considered semantically equivalent.
 
+### 3.3 Ternary Semantics of the Threshold (informative)
+On the 27-point lattice, $d_c$ takes only 13 distinct non-zero values, so
+$\epsilon$ acts as a step function. For every $\epsilon \in [0.6058, 0.7654)$ —
+including the default $0.65$ — a hit occurs iff the two triples differ in
+exactly one dimension by a $0 \leftrightarrow \pm1$ step and the sparser triple
+has at least one non-zero coordinate. Sign flips never hit; $(0,0,0)$ has no
+neighbours. The metric does not distinguish *which* dimension changed (e.g.
+Summarization vs. Translation along $O$). Implementations MAY use an explicit
+per-dimension match rule instead (`tsp_protocol.semantics.DimensionPolicy`).
+
+The triple encodes how a request is phrased, not what it is about. A cache
+SHOULD key entries on a content identifier (`meta.text_hash`) together with
+`s`, and MUST NOT serve an entry across different content identifiers.
+
+The verification threshold $\epsilon_{verify} = 0.30$ (SECURITY.md) is below the
+lattice spacing ($0.5176$) and is therefore equivalent to exact equality of `s`.
+
+### 3.4 Offline Policy Selection (informative)
+A match rule can be selected from shadow-mode logs (every request inferred,
+with a ground-truth answer key) by replaying each candidate rule and scoring
+$V = (\text{correct hits} - \lambda \cdot \text{false hits})/N$, following the
+replay-simulator approach of Dream-RSI (arXiv:2609.14858). See
+`tsp_protocol.dream`.
+
 ## 4. Packet Structure (JSON)
 | Field | Type | Description |
 | :--- | :--- | :--- |
@@ -47,6 +71,7 @@ A semantic match (Cache Hit) is determined by the threshold $\epsilon$ (epsilon)
 | `vec` | Array | Derived 4D S³ unit vector |
 | `control` | Object | Contains `eps` and `profile` (e.g., "sta-v0.1") |
 | `lang` | Object | *Optional.* Source/target language codes for cross-lingual matching: `{"src": ..., "tgt": ...}` |
+| `meta` | Object | *Optional.* `text_hash`: content identifier used as the cache key alongside `s` (§3.3) |
 | `origin` | String | Attribution seed for the creator |
 | `sig` | String | Signature (Default: "none" or "hmac-sha256:<hex>") |
 
